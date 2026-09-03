@@ -1,0 +1,75 @@
+solver_revision: yesno_en_v2
+base_frozen_config: configs/kvqa_final_hclt_vs_ours_as_2k.yaml
+changelog: 'ONE line changed in text_prompt / mm_prompt / iq_prompt: "- 예/아니오 질문이면 예 또는 아니오로 답하세요." -> "- 예/아니오로 답할 수 있는 질문이면 반드시 영어로 Yes 또는 No 중 하나만 출력하세요.". KVQA stores yes/no gold as English Yes/No; the frozen solver instructed Korean 예/아니오. No other instruction, no decoding param, no method-specific prompt, no answer_type hint changed. Applied identically to I+Q / Generic-MM / HCLT-MM / Ours-AS-MM / Ours-DirectAS-r2-MM.'
+solver:
+  text_prompt: '다음 이미지 설명만 참고하여 질문에 답하세요.
+
+
+    이미지 설명:
+
+    {caption}
+
+
+    질문:
+
+    {question}
+
+
+    규칙:
+
+    - 실제 이미지는 제공되지 않았습니다. 이미지 설명에 없는 내용을 추측하지 마세요.
+
+    - 정답만 간결하게 작성하세요.
+
+    - 불필요한 설명이나 이유는 작성하지 마세요.
+
+    - 숫자 질문이면 숫자 중심으로 답하세요.
+
+    - 예/아니오로 답할 수 있는 질문이면 반드시 영어로 Yes 또는 No 중 하나만 출력하세요.
+
+    '
+  mm_prompt: '다음 이미지와 이미지 설명을 참고하여 질문에 답하세요.
+
+
+    이미지 설명:
+
+    {caption}
+
+
+    질문:
+
+    {question}
+
+
+    규칙:
+
+    - 정답만 간결하게 작성하세요.
+
+    - 불필요한 설명이나 이유는 작성하지 마세요.
+
+    - 숫자 질문이면 숫자 중심으로 답하세요.
+
+    - 예/아니오로 답할 수 있는 질문이면 반드시 영어로 Yes 또는 No 중 하나만 출력하세요.
+
+    '
+  iq_prompt: '다음 이미지를 참고하여 질문에 답하세요.
+
+
+    질문:
+
+    {question}
+
+
+    규칙:
+
+    - 정답만 간결하게 작성하세요.
+
+    - 불필요한 설명이나 이유는 작성하지 마세요.
+
+    - 숫자 질문이면 숫자 중심으로 답하세요.
+
+    - 예/아니오로 답할 수 있는 질문이면 반드시 영어로 Yes 또는 No 중 하나만 출력하세요.
+
+    '
+  max_new_tokens: 20
+  do_sample: false

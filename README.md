@@ -113,3 +113,98 @@ Nothing above is changed based on results.
 `predictions_{iq,generic_text,generic_mm,hclt_text,hclt_mm,raw_text,raw_mm,as_text,as_mm}.jsonl`,
 `scored_*.jsonl`, `leakage_{generic,hclt,raw,as}.jsonl`, `summary.json`,
 `sanity30_review.html`, `review.html`.
+
+---
+
+## 6. Extensions in this revision
+
+Three additive changes. **Nothing above is modified**: the frozen 2K prompts, solver,
+evaluator, leakage detector and split are byte-for-byte unchanged, and the frozen outputs
+are not regenerated.
+
+### 6a. Ours-DirectAS-r2 — acquisition-time answer protection
+
+Instead of generating raw answer-bearing evidence and then removing the answer with a Stage-3
+suppressor (Ours-AS), DirectAS folds suppression into the acquisition step:
+
+```
+Question ─► 9-key PROTECTED decomposition   (question only; no image, no gold)
+            = frozen 6 keys + observation_target + protected_answer_value + evidence_to_preserve
+Image, protected decomposition ─► directly answer-suppressed visual guidance ......... Ours-DirectAS-r2
+                                  (NO Stage-3 suppressor)
+```
+
+`protected_answer_value` records the *meaning* of the answer variable, never a value
+(`"액정에 표시된 숫자 문자열"`, not `"3:00"`); Stage 2 must not emit it, while keeping
+localization / reference object / region / shape cues. Prompts are frozen at revision **r2**
+(one rule-level re-freeze after a 30-sample wiring check; see the config `revision:` field and
+its `changelog`). No per-sample tuning.
+
+```
+configs/kvqa_ours_directas.yaml          # protected_decomposition + protected_evidence (r2)
+src/gqa/kvqa_directas_gen.py             # 2 stages: pdecomp (text) -> pevidence (image)
+src/gqa/kvqa_directas_sanity.py          # 30-sample diagnostic HTML/JSONL (fixed sanity ids)
+src/gqa/kvqa_directas_solve.py           # frozen common solver applied to DirectAS evidence
+src/gqa/kvqa_directas_pilot_build.py     # deterministic 500-sample pilot subset (first 500)
+src/gqa/kvqa_directas_pilot_analyze.py   # pilot scoring + paired bootstrap + leakage + length
+src/gqa/kvqa_directas_final_compare.py   # 2K four-method comparison (MM utility / exposure / tokens / q-type)
+```
+
+```bash
+GQA_FORCE_GPU=<id> ./run.sh directas-gen --stage pdecomp,pevidence --shard <i>/<N>
+./run.sh directas-sanity
+./run.sh directas-pilot-build && ./run.sh directas-fanout <N> --manifest <pilot500> --outdir <pilotdir> && ./run.sh directas-pilot-analyze
+./run.sh directas-compare
+```
+
+### 6b. Yes/No output-format-corrected common solver
+
+KVQA stores `yes/no` gold as English `Yes` / `No`; the frozen solver instructs Korean
+`예` / `아니오`, so every `yes/no` question scored 0 for **all** methods (a pure output-format
+artifact, uniform, non-biasing). `configs/kvqa_final_solver_yesno_fixed.yaml`
+(`solver_revision: yesno_en_v2`) changes exactly one rule line in `text_prompt` / `mm_prompt` /
+`iq_prompt`:
+
+```
+- 예/아니오 질문이면 예 또는 아니오로 답하세요.
++ 예/아니오로 답할 수 있는 질문이면 반드시 영어로 Yes 또는 No 중 하나만 출력하세요.
+```
+
+Everything else (other rules, greedy decoding, `max_new_tokens=20`, no answer_type hint, no
+method-specific prompt) is unchanged, applied identically to all five conditions. The original
+frozen-solver numbers remain the pre-registered run.
+
+```
+src/gqa/kvqa_yesno_fixed_solve.py     # re-solve I+Q + {Generic,HCLT,Ours-AS,DirectAS-r2}-MM
+src/gqa/kvqa_yesno_fixed_analyze.py   # yes/no subset table + non-yes/no stability + corrected tables
+```
+
+```bash
+./run.sh yesno-solve <N> --config configs/kvqa_final_solver_yesno_fixed.yaml \
+         --repr-dir <reprdir> --directas-dir <dadir> --outdir <outdir>
+./run.sh yesno-analyze
+```
+
+### 6c. Full eligible test split (N = 9424)
+
+`src/gqa/kvqa_full_build.py` is `kvqa_final_build.py` with the `random.Random(20260903)
+.sample(resolvable, 2000)` subsample removed — same source (`test_annotation_indices`),
+eligibility (kvqa-source, resolvable image, 10 answers, official `answer_type`) and ordering
+(annotation index ascending). Path constants read `KVQA_ANNOTATIONS` / `KVQA_SPLIT` /
+`KVQA_IMAGE_GLOB` like the 2K build. `src/gqa/kvqa_final_full_analyze.py` merges shards, scores
+the five MM conditions with the corrected solver, and emits the full comparison
+(`final_full_comparison.md` + `*.csv` + `full_summary.json`). The 2000 frozen-subset
+representations are reused verbatim for the overlapping ids (identical prompts, deterministic
+greedy); the remaining 7424 use the same pipelines.
+
+```bash
+./run.sh build-full
+GQA_FORCE_GPU=<id> ./run.sh full-fanout src.gqa.kvqa_final_gen <N> \
+   --manifest outputs/kvqa_final_full/manifest.jsonl --outdir outputs/kvqa_final_full --stage decomp,raw,supp
+# ... likewise kvqa_directas_gen (pdecomp,pevidence) and kvqa_final_gen (generic); then hclt; then:
+./run.sh yesno-solve <N> --manifest outputs/kvqa_final_full/manifest.jsonl \
+   --repr-dir outputs/kvqa_final_full --directas-dir outputs/kvqa_final_full --outdir outputs/kvqa_final_full
+./run.sh full-analyze
+```
+
+Results for 6a–6c: **[`RESULTS_DIRECTAS.md`](RESULTS_DIRECTAS.md)**.
