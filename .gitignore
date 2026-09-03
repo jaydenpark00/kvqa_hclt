@@ -1,0 +1,16 @@
+# local data / outputs (never commit — KVQA license + size)
+/data/
+/outputs/
+/cache/
+/.venv/
+/models/
+*.jsonl
+!assets/*.json
+# but assets/*.json is fine; assets never has .jsonl
+
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.log
+logs/

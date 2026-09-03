@@ -1,0 +1,154 @@
+# Korean GQA — PHASE C prompts (GC / QAC / Guide) + frozen final-answer protocol.
+#
+# Backbone for EVERY generation and the final solver: Qwen/Qwen3-VL-8B-Instruct.
+# Qwen2-VL PHASE B/B.5 is a historical HCLT-style anchor only — its text is NOT reused here.
+#
+# Freeze status: FROZEN 2026-08-31 after C0 (one correction applied to guide_instruction; see
+#               reports/korean_gqa_phase_c0_sanity.md). Do not edit for the rest of PHASE C.
+
+model:
+  name: "Qwen/Qwen3-VL-8B-Instruct"
+  torch_dtype: "bfloat16"
+  # Qwen3-VL visual token budget — processor defaults unless overridden here.
+  min_pixels: 200704            # 256*28*28   (matches Exp1/PHASE B intent)
+  max_pixels: 1003520           # 1280*28*28
+
+generation:
+  do_sample: false
+  num_beams: 1
+  temperature: null
+  top_p: null
+  # generation lengths per text type
+  generic_caption_max_new_tokens: 300
+  qaware_caption_max_new_tokens: 300
+  guide_max_new_tokens: 200
+  answer_max_new_tokens: 12         # frozen from PHASE B.5
+
+# ---------------------------------------------------------------------------------------
+# A. GENERIC CAPTION (GC) — image only, question NEVER provided, one per image.
+#    Same Direct-KO semantic intent as Exp1/PHASE B.
+# ---------------------------------------------------------------------------------------
+generic_caption_instruction: |
+  이 이미지를 자세히 설명하세요.
+  이미지에서 실제로 관찰할 수 있는 내용만 작성하세요.
+  객체, 사람, 행동, 속성, 개수, 위치 관계 등 시각적으로 확인 가능한 정보를 가능한 한 구체적으로 설명하세요.
+  추측하거나 이미지에 없는 정보를 추가하지 마세요.
+
+# ---------------------------------------------------------------------------------------
+# B. QUESTION-AWARE DESCRIPTIVE CAPTION (QAC) — image + question.
+#    Strong question-aware caption baseline. MAY contain answer-bearing observable facts.
+#    Must stay a description, not just emit the final answer. NOT told to suppress the answer.
+# ---------------------------------------------------------------------------------------
+qaware_caption_instruction: |
+  다음 질문에 답하는 데 관련된 이미지의 시각적 사실을 중심으로 이미지를 구체적으로 설명하세요.
+  이미지에서 실제로 관찰 가능한 내용만 작성하세요.
+  질문과 관련된 객체, 속성, 관계, 위치, 비교 정보를 빠뜨리지 마세요.
+  추측하지 마세요.
+
+  질문:
+  {question}
+
+# ---------------------------------------------------------------------------------------
+# C. ANSWER-EXCLUDED VISUAL INSPECTION GUIDE (Guide) — image + question.
+#    Preserve WHERE / ROUTE / INSPECT. Suppress INSPECTION RESULT / FINAL ANSWER.
+#    Concise; no long chain-of-thought.
+# ---------------------------------------------------------------------------------------
+guide_instruction: |
+  이미지와 질문을 보고, 정답 자체는 말하지 않은 채 이 질문에 답하기 위해 이미지에서 무엇을 어떤 순서로
+  확인해야 하는지 짧고 구체적인 시각적 확인 가이드를 작성하세요.
+
+  포함할 것:
+  - 먼저 찾아야 할 기준 객체나 영역
+  - 확인해야 할 대상 (그 대상이 정답이 되는 경우에는 "무엇의 왼쪽/오른쪽/위/아래", "몇 번째 위치" 처럼
+    위치·방향으로만 지칭하고 이름·종류·색으로 지칭하지 마세요)
+  - 따라가야 할 관계나 위치
+  - 최종적으로 확인하거나 비교해야 할 시각적 속성
+
+  금지:
+  - 질문의 정답
+  - 질문에서 요구하는 속성의 실제 값
+  - 최종 yes/no 판단
+  - 정답이 되는 관계 방향 (예: "왼쪽에 있음을 확인" 처럼 방향을 단정하지 마세요)
+  - 정답이 되는 객체의 이름·종류·고유한 생김새 (그 객체가 정답이면 위치로만 가리키세요)
+  - "확인한다 / 비교한다" 를 넘어서 그 확인의 결과를 문장으로 단정하는 것
+
+  질문을 단순히 명령형으로 바꾸지 말고, 실제 이미지를 확인하는 데 도움이 되는 경로를 작성하세요.
+  마지막 문장은 "무엇을 비교/확인하라" 로 끝내고, 그 결과가 무엇인지는 쓰지 마세요.
+
+  질문:
+  {question}
+
+# ---------------------------------------------------------------------------------------
+# FINAL ANSWER PROTOCOL — identical across ALL 8/9 solver conditions (frozen from B.5).
+# {context} is empty for Q / I+Q, or "이미지 설명:\n<GC|QAC>\n\n" / "확인 가이드:\n<Guide>\n\n".
+# {image_line} tells the solver whether an image is attached (kept constant-shaped).
+# ---------------------------------------------------------------------------------------
+answer_instruction: |
+  질문에 대한 정답만 출력하세요.
+  설명하거나 완전한 문장으로 답하지 마세요.
+  정답에 해당하는 단어나 짧은 구만 쓰세요.
+
+solver_prompts:
+  # Q  — question only
+  q: |
+    아래 질문에 답하세요.
+
+    질문:
+    {question}
+
+    {answer_instruction}
+  # I+Q — image + question
+  iq: |
+    이미지를 보고 아래 질문에 답하세요.
+
+    질문:
+    {question}
+
+    {answer_instruction}
+  # GC+Q / QAC+Q — text context, NO image
+  textctx_noimg: |
+    아래 {ctx_label}을 참고하여 질문에 답하세요.
+
+    {ctx_label}:
+    {context}
+
+    질문:
+    {question}
+
+    {answer_instruction}
+  # I+GC+Q / I+QAC+Q — image + text context
+  textctx_img: |
+    이미지와 아래 {ctx_label}을 참고하여 질문에 답하세요.
+
+    {ctx_label}:
+    {context}
+
+    질문:
+    {question}
+
+    {answer_instruction}
+  # G+Q — guide, NO image
+  guide_noimg: |
+    아래 시각 확인 가이드를 참고하여 질문에 답하세요.
+
+    시각 확인 가이드:
+    {context}
+
+    질문:
+    {question}
+
+    {answer_instruction}
+  # I+G+Q / I+SG+Q — image + guide
+  guide_img: |
+    이미지와 아래 시각 확인 가이드를 참고하여 이미지에서 직접 확인한 뒤 질문에 답하세요.
+
+    시각 확인 가이드:
+    {context}
+
+    질문:
+    {question}
+
+    {answer_instruction}
+
+# ctx_label used in textctx_* templates: "이미지 설명" for GC and QAC.
+ctx_label_caption: "이미지 설명"

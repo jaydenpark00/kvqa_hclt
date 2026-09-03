@@ -1,0 +1,272 @@
+# Korean GQA — FINAL: HCLT-style relevance-selection baseline  vs  Structured Visual Evidence
+#                     (Ours-Raw)  vs  + gold-free answer suppression (Ours-AS, FINAL).
+#
+# Same fixed diagnostic 2K (official val), same backbone Qwen3-VL-8B-Instruct, same frozen
+# text-only solver + evaluator for every method. Representation strategy is the ONLY variable.
+# NOT an exact HCLT reproduction — "HCLT-style relevance-selection baseline adapted to the
+# common Qwen3-VL backbone". Method is FROZEN before the 2K run; no prompt/detector/evaluator
+# change after results.
+
+eval_set:
+  manifest: "outputs/korean_gqa_large_fresh_val/diagnostic2000_manifest.jsonl"
+  n: 2000
+  note: "official val; full_answer excluded; one QA/image; frozen; same sample IDs & order as the
+         large-fresh diagnostic 2K. NO new sampling, NO new seed."
+
+backbone:
+  name: "Qwen/Qwen3-VL-8B-Instruct"
+  env: "/ceph_data/jaydenpark/envs/qwen3vl"
+  wrapper: "src/gqa/qwen3vl.py  (reused unchanged)"
+  decoding: "greedy — do_sample=False, num_beams=1"
+
+# =====================================================================================
+# A. GENERIC CAPTION  (image only; question-agnostic; reused by HCLT selection)
+#    HCLT's real caption prompt is unpublished -> this is a paper-faithful APPROXIMATION.
+#    The "6~10 short sentences" target is an implementation choice so top-3 selection is
+#    non-degenerate; it is NOT a published HCLT number. Recorded as a limitation.
+# =====================================================================================
+generic_caption:
+  max_new_tokens: 300
+  instruction: |
+    이미지를 직접 관찰하고, 이미지 전체에서 명확하게 보이는 시각 정보를
+    상세한 한국어 설명으로 작성하세요.
+
+    주요 객체, 객체의 눈에 보이는 속성, 상태와 행동,
+    객체 사이의 공간적 관계, 배경 및 장면 정보,
+    그리고 명확하게 읽을 수 있는 텍스트를 포함하세요.
+
+    규칙:
+    1. 특정 질문을 가정하지 마세요.
+    2. 질문의 정답을 추측하려고 하지 마세요.
+    3. 이미지에서 직접 관찰 가능한 사실만 작성하세요.
+    4. 이미지에서 확인할 수 없는 내용은 추측하지 마세요.
+    5. 외부 지식이나 상식으로 이미지에 없는 정보를 추가하지 마세요.
+    6. 서로 다른 시각적 사실은 가능한 한 별도의 문장으로 작성하세요.
+    7. 한 문장에 지나치게 많은 사실을 합치지 마세요.
+    8. 같은 사실을 반복하지 마세요.
+    9. 자연스러운 한국어 평서문으로 작성하세요.
+    10. 가능하면 6~10개의 짧은 문장으로 상세하게 설명하세요.
+    11. Yes, No, unanswerable 같은 QA 정답 형식으로 작성하지 마세요.
+
+    출력은 이미지 설명만 작성하세요.
+
+# =====================================================================================
+# B. HCLT-style High-density selection  (no VLM; no gold)
+# =====================================================================================
+hclt_high_density:
+  embedding_model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  embedding_loader: "transformers.AutoModel + mean pooling + L2 normalize  (== sentence-transformers
+                     for this model; sentence-transformers pkg not installed, model is cached)"
+  similarity: "cosine"
+  top_k: 3
+  sentence_splitter: "deterministic: split on . ? ! and newlines; keep terminal punctuation;
+                      do NOT rewrite/merge into semantic units; drop empty/whitespace-only"
+  tie_breaking: "earlier sentence in the original caption wins"
+  selected_ordering: "similarity descending"
+  fewer_than_3: "use the sentences that exist; NEVER duplicate"
+  gold_use: "NONE — gold is never used in selection"
+
+# =====================================================================================
+# C/D. OURS  —  Question-only decomposition  ->  Image+decomp raw evidence  ->  suppressor
+#      All three prompts are the SOURCE OF TRUTH from the instruction (a separate past repo);
+#      no server-side variant is searched or assumed.
+# =====================================================================================
+ours_decomposition:                     # Stage 1 — QUESTION ONLY (no image, no gold, no caption)
+  max_new_tokens: 128
+  instruction: |
+    한국어 시각 질문을, 이미지에서 무엇을 관찰해야 하는지 나타내는 JSON으로 분해하세요. 정답이나 이미지 내용을 추측하지 마세요.
+
+    반드시 아래 6개 키를 정확히 한 번씩 모두 출력하세요. 값이 없더라도 키를 생략하지 말고 null을 출력하세요. JSON 앞뒤에 설명이나 코드 펜스를 붙이지 마세요.
+
+    {
+      "target_object": null,
+      "reference_object": null,
+      "relation_to_check": null,
+      "requested_property": null,
+      "state_or_action_to_check": null,
+      "answer_type": "other"
+    }
+
+    작성 규칙:
+    - target_object: 질문에서 확인할 주요 대상. "이것/이게"뿐이면 "이미지에서 지시된 주요 객체"라고 쓰고 객체 정답을 추측하지 마세요.
+    - reference_object: 대상을 구분하거나 위치 관계를 볼 다른 객체가 있을 때만 쓰고, 없으면 null.
+    - relation_to_check: 두 객체 사이에서 관찰할 관계만 쓰고, 없으면 null.
+    - requested_property: 관찰할 색상, 개수, 위치, 모양, 크기, 텍스트, 온도, 청결 상태 등의 속성. 없으면 null.
+    - state_or_action_to_check: 행동이나 상태를 사실로 단정하지 말고 중립적인 관찰 항목만 쓰세요. 반드시 "~ 상태" 또는 "~ 여부" 형태로 작성하세요. "켜져 있음", "꺼져 있음", "밝음", "어두움", "지저분한 상태"처럼 예상 답을 쓰면 안 됩니다. 전원 질문에는 언제나 "전원 상태"를 쓰세요.
+    - answer_type: yes_no, number, color, location, object, text, state, action, attribute, other 중 하나. yes_no는 예/아니오로 답하는 양자 질문에만 사용하세요. 날씨나 현재 상태를 묻는 "어때?" 질문은 state, 밝기·크기·모양 같은 속성값 질문은 attribute를 사용하세요. other는 앞 유형으로 분류할 수 없을 때만 사용하세요. unanswerable은 금지합니다.
+    - 값은 answer_type을 제외하고 한국어로 작성하세요.
+
+    예시 질문: 불이 켜져 있나요?
+    예시 출력:
+    {
+      "target_object": "불",
+      "reference_object": null,
+      "relation_to_check": null,
+      "requested_property": null,
+      "state_or_action_to_check": "전원 상태",
+      "answer_type": "yes_no"
+    }
+
+    예시 질문: 실내가 어두운지 밝은지 알려주세요
+    예시 출력:
+    {
+      "target_object": "실내 환경",
+      "reference_object": null,
+      "relation_to_check": null,
+      "requested_property": "밝기",
+      "state_or_action_to_check": null,
+      "answer_type": "other"
+    }
+
+    Question:
+    {question}
+
+ours_raw_evidence:                       # Stage 2 — IMAGE + decomposition (no original question, no gold)
+  max_new_tokens: 300
+  instruction: |
+    아래 질문 구성요소를 참고하여 이미지를 직접 관찰하고, 해당 구성요소와 관련하여 명확하게 보이는 객체, 속성, 상태, 행동, 공간 관계와 읽을 수 있는 텍스트를 중심으로 자연스러운 한국어로 설명하세요.
+
+    Question Components:
+    {decomposition_json}
+
+    규칙:
+    1. 이미지에서 직접 관찰 가능한 사실만 작성하세요.
+    2. 질문 구성요소는 이미지에서 어떤 정보를 중심으로 볼 것인지 정하기 위한 지침으로만 사용하세요.
+    3. 질문에 대한 최종 정답을 생성하거나 정답 형태로 내용을 요약하지 마세요.
+    4. 질문 구성요소에 포함된 내용을 실제 이미지의 사실로 가정하지 마세요.
+    5. 이미지에서 식별할 수 없는 내용은 추측하지 마세요.
+    6. 모델의 상식이나 외부 지식을 이용해 이미지에 없는 정보를 추가하지 마세요.
+    7. 해상도나 픽셀 크기를 실제 객체 크기로 해석하지 마세요.
+    8. Yes, No, unanswerable 같은 QA 정답 형식으로 작성하지 마세요.
+    9. 질문과 관련 없는 이미지 정보는 불필요하게 자세히 설명하지 마세요.
+    10. 1~3개의 자연스러운 한국어 문장만 출력하세요.
+
+# -------------------------------------------------------------------------------------
+# Stage 3 — gold-free answer suppressor.  Input = Question + Raw Evidence ONLY.
+#   `original_phase_h_suppressor_instruction` : verbatim from
+#       configs/gqa_phase_h_answer_suppressed_strong_guide.yaml : suppressor_instruction
+#   `adapted_evidence_suppressor_instruction` : MECHANICAL adaptation for a 1-3 sentence
+#       Structured Evidence caption (NOT a numbered procedure). Only the "step" language was
+#       changed to "sentence" language; every forbidden pattern / preservation rule / "do not
+#       generalize or abbreviate" / "keep question object names" principle is unchanged.
+#       No re-prompt-search against the new task.
+# -------------------------------------------------------------------------------------
+suppressor:
+  max_new_tokens: 420
+  source_file: "configs/gqa_phase_h_answer_suppressed_strong_guide.yaml"
+  source_key: "suppressor_instruction"
+  changelog:
+    - "'시각적 확인 가이드' -> '시각 증거 설명'"
+    - "'새 가이드를 작성하세요' -> '새 설명을 작성하세요'"
+    - "'단계의 개수와 순서, 절차적 흐름' -> '문장의 개수와 순서'"
+    - "'가이드를 일반화하거나 축약하지 마세요' -> '설명을 일반화하거나 축약하지 마세요'"
+    - "'출력에는 새 가이드 단계만 쓰세요' -> '출력에는 새 시각 증거 설명만 1~3개의 자연스러운 한국어 문장으로 쓰세요'"
+    - "입력 라벨 '가이드:' -> '시각 증거 설명:' ; placeholder {guide} -> {raw_evidence}"
+    - "forbidden patterns / preservation list / 원칙 문구는 전부 그대로"
+  original_phase_h_suppressor_instruction: |
+    아래는 하나의 질문과, 그 질문을 풀기 위한 시각적 확인 가이드입니다.
+    이 가이드에서 "정답을 알려주는 표현"만 제거하거나 추상화하고,
+    나머지 시각적 안내는 그대로 유지한 새 가이드를 작성하세요.
+
+    다음에 해당하는 표현만 바꾸세요:
+    - 가능한 정답 후보의 나열
+      예) "금속인지 플라스틱인지 확인한다"
+          → "질문에서 요구하는 재질 범주를 판단한다"
+    - 질문이 묻는 색·재질·개수·모양·상태의 구체적 값
+      예) "손잡이는 검은색이고 날은 은색임을 확인한다"
+          → "손잡이와 날 각각의 색을 확인한다"
+    - 비교·관계의 결과 단정
+      예) "A가 B보다 크다는 결과로 판단한다"
+          → "두 대상의 크기 비교 결과를 질문이 요구하는 형식으로 답한다"
+    - 정체를 묻는 질문에서 정답 객체명 언급
+      예) "그 물체가 컵인지 확인한다"
+          → "해당 대상의 객체 종류를 확인한다"
+    - 최종 yes/no 단정
+
+    반드시 그대로 유지할 것:
+    - 단계의 개수와 순서, 절차적 흐름
+    - 이미지 속 위치 단서 (예: "이미지 중앙 우측", "흰색 접시 위", "봉투 왼쪽 영역")
+    - 기준 객체 / 질문 대상 / 혼동 후보를 구분하는 정보
+    - 확인해야 할 시각적 부분과 속성 (반사광, 표면 질감, 윤곽, 높이·너비, 색 구분 등)
+    - 비교 축·기준·참조 대상
+    - 정답이 아닌 다른 시각 정보
+
+    가이드를 일반화하거나 축약하지 마세요.
+    위 목록에 해당하지 않는 문장은 한 글자도 바꾸지 말고 그대로 두세요.
+    질문에 이미 등장하는 객체명은 그대로 두어도 됩니다.
+    출력에는 새 가이드 단계만 쓰세요.
+
+    질문:
+    {question}
+
+    가이드:
+    {guide}
+  adapted_evidence_suppressor_instruction: |
+    아래는 하나의 질문과, 그 질문을 풀기 위한 시각 증거 설명입니다.
+    이 설명에서 "정답을 알려주는 표현"만 제거하거나 추상화하고,
+    나머지 시각적 안내는 그대로 유지한 새 설명을 작성하세요.
+
+    다음에 해당하는 표현만 바꾸세요:
+    - 가능한 정답 후보의 나열
+      예) "금속인지 플라스틱인지 확인한다"
+          → "질문에서 요구하는 재질 범주를 판단한다"
+    - 질문이 묻는 색·재질·개수·모양·상태의 구체적 값
+      예) "손잡이는 검은색이고 날은 은색임을 확인한다"
+          → "손잡이와 날 각각의 색을 확인한다"
+    - 비교·관계의 결과 단정
+      예) "A가 B보다 크다는 결과로 판단한다"
+          → "두 대상의 크기 비교 결과를 질문이 요구하는 형식으로 답한다"
+    - 정체를 묻는 질문에서 정답 객체명 언급
+      예) "그 물체가 컵인지 확인한다"
+          → "해당 대상의 객체 종류를 확인한다"
+    - 최종 yes/no 단정
+
+    반드시 그대로 유지할 것:
+    - 문장의 개수와 순서
+    - 이미지 속 위치 단서 (예: "이미지 중앙 우측", "흰색 접시 위", "봉투 왼쪽 영역")
+    - 기준 객체 / 질문 대상 / 혼동 후보를 구분하는 정보
+    - 확인해야 할 시각적 부분과 속성 (반사광, 표면 질감, 윤곽, 높이·너비, 색 구분 등)
+    - 비교 축·기준·참조 대상
+    - 정답이 아닌 다른 시각 정보
+
+    설명을 일반화하거나 축약하지 마세요.
+    위 목록에 해당하지 않는 문장은 한 글자도 바꾸지 말고 그대로 두세요.
+    질문에 이미 등장하는 객체명은 그대로 두어도 됩니다.
+    출력에는 새 시각 증거 설명만 1~3개의 자연스러운 한국어 문장으로 쓰세요.
+
+    질문:
+    {question}
+
+    시각 증거 설명:
+    {raw_evidence}
+
+# =====================================================================================
+# COMMON frozen text-only solver (identical for Generic / HCLT / Ours-Raw / Ours-AS)
+# =====================================================================================
+solver:
+  source_file: "configs/gqa_phase_c_prompts.yaml"
+  template_key: "solver_prompts.textctx_noimg"
+  answer_instruction_key: "answer_instruction"
+  ctx_label: "이미지 설명"
+  max_new_tokens: 12
+  code: "src/gqa/main2000_solve.py  (large-fresh reused it; frozen)"
+
+# =====================================================================================
+# COMMON frozen leakage detector
+# =====================================================================================
+leakage:
+  code: "src/gqa/main2000_diag.py  (frozen regex defs reused verbatim)"
+  NOVEL_GOLD_MENTION: "lexical_answer_present(normalize_ko(gold), text) AND NOT (normalize_ko(gold)
+                       already a whitespace-insensitive substring of normalize_ko(question)).
+                       Lexical proxy — may miss semantic synonym / paraphrase leakage."
+  RESULT_PROPOSITION: "per sentence: _CMP_OUT (더 크다/작다/길다/짧다/높다/낮다/많다/적다/넓다/좁다/두껍다/얇다/
+                       가깝다/무겁다/가볍다 + 종결) OR _DIR_OUT (왼쪽/오른쪽/위/아래/앞/뒤 + 있다/위치한다/놓여있다)
+                       OR _YESNO_OUT (답은/결론은/따라서 + 예/아니오/그렇다/아니다/맞다/틀리다), where the ±4-char
+                       window is NOT interrogative (는지/ㄴ지/은지/인지/지 여부/지 확인/지 판단/지 비교)."
+  CANDIDATE_ENUMERATION: "quoted pair joined by 또는/혹은///,/· ; OR 'X인지 Y인지' ; OR 또는/혹은 … 중
+                          (하나|어느|어떤|무엇) within 24 chars."
+
+stats:
+  method: "paired bootstrap 95% CI, seed 20240301, 10000 resamples"
+  primary_metric: "norm_match (src/gqa/common.py)"
+  secondary_metric: "exact_match"

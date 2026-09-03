@@ -1,0 +1,322 @@
+{
+  "n": 2000,
+  "primary_metric": "KVQA soft VQA accuracy (min(match/3,1) over 10 answers)",
+  "iq_mm_acc": {
+    "acc": 0.342,
+    "ci": [
+      0.322,
+      0.36133333333333334
+    ]
+  },
+  "main_table": {
+    "generic": {
+      "text_acc": 0.27266666666666667,
+      "text_ci": [
+        0.25399999999999995,
+        0.2915
+      ],
+      "mm_acc": 0.3238333333333333,
+      "mm_ci": [
+        0.3043333333333333,
+        0.3431666666666667
+      ],
+      "image_gain": 0.05116666666666664,
+      "novel_gold": 0.554,
+      "novel_gold_match_count": 0.738,
+      "result_prop": 0.003,
+      "cand_enum": 0.072,
+      "length": {
+        "n": 2000,
+        "mean_sentences": 9.32,
+        "median_sentences": 9.0,
+        "mean_chars": 369.8,
+        "mean_tokens": 244.9,
+        "p25_tokens": 207.0,
+        "p75_tokens": 298.0
+      }
+    },
+    "hclt": {
+      "text_acc": 0.19966666666666666,
+      "text_ci": [
+        0.18283333333333332,
+        0.21683333333333335
+      ],
+      "mm_acc": 0.3293333333333333,
+      "mm_ci": [
+        0.3098333333333333,
+        0.34883333333333333
+      ],
+      "image_gain": 0.12966666666666665,
+      "novel_gold": 0.3735,
+      "novel_gold_match_count": 0.449,
+      "result_prop": 0.001,
+      "cand_enum": 0.02,
+      "length": {
+        "n": 2000,
+        "mean_sentences": 3.0,
+        "median_sentences": 3.0,
+        "mean_chars": 111.6,
+        "mean_tokens": 76.1,
+        "p25_tokens": 64.0,
+        "p75_tokens": 86.0
+      }
+    },
+    "raw": {
+      "text_acc": 0.27133333333333337,
+      "text_ci": [
+        0.25266666666666665,
+        0.28983333333333333
+      ],
+      "mm_acc": 0.32683333333333336,
+      "mm_ci": [
+        0.30766666666666664,
+        0.3463333333333333
+      ],
+      "image_gain": 0.055499999999999994,
+      "novel_gold": 0.531,
+      "novel_gold_match_count": 0.6925,
+      "result_prop": 0.0005,
+      "cand_enum": 0.0445,
+      "length": {
+        "n": 2000,
+        "mean_sentences": 2.39,
+        "median_sentences": 2.0,
+        "mean_chars": 109.7,
+        "mean_tokens": 75.3,
+        "p25_tokens": 60.0,
+        "p75_tokens": 88.0
+      }
+    },
+    "as": {
+      "text_acc": 0.094,
+      "text_ci": [
+        0.082,
+        0.10616666666666666
+      ],
+      "mm_acc": 0.3245,
+      "mm_ci": [
+        0.3053333333333333,
+        0.3441666666666666
+      ],
+      "image_gain": 0.2305,
+      "novel_gold": 0.2435,
+      "novel_gold_match_count": 0.3095,
+      "result_prop": 0.0,
+      "cand_enum": 0.0195,
+      "length": {
+        "n": 2000,
+        "mean_sentences": 2.49,
+        "median_sentences": 2.0,
+        "mean_chars": 95.0,
+        "mean_tokens": 65.1,
+        "p25_tokens": 50.8,
+        "p75_tokens": 78.0
+      }
+    }
+  },
+  "by_category": {
+    "yes/no": {
+      "n": 103,
+      "iq": 0.0,
+      "generic_text": 0.0,
+      "generic_mm": 0.0,
+      "hclt_text": 0.0,
+      "hclt_mm": 0.0,
+      "raw_text": 0.0,
+      "raw_mm": 0.0,
+      "as_text": 0.0,
+      "as_mm": 0.0
+    },
+    "number": {
+      "n": 198,
+      "iq": 0.7744107744107743,
+      "generic_text": 0.6363636363636364,
+      "generic_mm": 0.728956228956229,
+      "hclt_text": 0.5168350168350168,
+      "hclt_mm": 0.7457912457912459,
+      "raw_text": 0.6717171717171717,
+      "raw_mm": 0.7525252525252525,
+      "as_text": 0.15151515151515152,
+      "as_mm": 0.7592592592592592
+    },
+    "other": {
+      "n": 1427,
+      "iq": 0.36393366035972896,
+      "generic_text": 0.2898855407615043,
+      "generic_mm": 0.34548002803083394,
+      "hclt_text": 0.20485867787900022,
+      "hclt_mm": 0.350385423966363,
+      "raw_text": 0.28404578369539824,
+      "raw_mm": 0.34501284746554545,
+      "as_text": 0.10932025227750526,
+      "as_mm": 0.3415089932258818
+    },
+    "unanswerable": {
+      "n": 272,
+      "iq": 0.041666666666666664,
+      "generic_text": 0.020833333333333332,
+      "generic_mm": 0.03799019607843137,
+      "hclt_text": 0.017156862745098037,
+      "hclt_mm": 0.04044117647058824,
+      "raw_text": 0.015931372549019607,
+      "raw_mm": 0.04534313725490196,
+      "as_text": 0.007352941176470588,
+      "as_mm": 0.041666666666666664
+    }
+  },
+  "comparisons": {
+    "Generic->HCLT": {
+      "text": {
+        "delta": -0.07300000000000001,
+        "lo": -0.08783333333333333,
+        "hi": -0.058166666666666665,
+        "excl0": true
+      },
+      "mm": {
+        "delta": 0.005500000000000005,
+        "lo": -0.004166666666666667,
+        "hi": 0.015333333333333336,
+        "excl0": false
+      },
+      "novel_gold": {
+        "delta": -0.18050000000000005,
+        "lo": -0.197,
+        "hi": -0.164,
+        "excl0": true
+      },
+      "result_prop": {
+        "delta": -0.002,
+        "lo": -0.004,
+        "hi": -0.0005,
+        "excl0": true
+      },
+      "cand_enum": {
+        "delta": -0.05199999999999999,
+        "lo": -0.062,
+        "hi": -0.0425,
+        "excl0": true
+      }
+    },
+    "HCLT->Ours-Raw": {
+      "text": {
+        "delta": 0.07166666666666671,
+        "lo": 0.0545,
+        "hi": 0.0885,
+        "excl0": true
+      },
+      "mm": {
+        "delta": -0.0024999999999999467,
+        "lo": -0.015333333333333332,
+        "hi": 0.010166666666666666,
+        "excl0": false
+      },
+      "novel_gold": {
+        "delta": 0.15750000000000003,
+        "lo": 0.1375,
+        "hi": 0.178,
+        "excl0": true
+      },
+      "result_prop": {
+        "delta": -0.0005,
+        "lo": -0.0025,
+        "hi": 0.001,
+        "excl0": false
+      },
+      "cand_enum": {
+        "delta": 0.024499999999999997,
+        "lo": 0.014,
+        "hi": 0.0355,
+        "excl0": true
+      }
+    },
+    "Raw->AS": {
+      "text": {
+        "delta": -0.17733333333333337,
+        "lo": -0.1948333333333333,
+        "hi": -0.15983333333333333,
+        "excl0": true
+      },
+      "mm": {
+        "delta": -0.002333333333333354,
+        "lo": -0.011666666666666665,
+        "hi": 0.006666666666666666,
+        "excl0": false
+      },
+      "novel_gold": {
+        "delta": -0.28750000000000003,
+        "lo": -0.3075,
+        "hi": -0.2675,
+        "excl0": true
+      },
+      "result_prop": {
+        "delta": -0.0005,
+        "lo": -0.0015,
+        "hi": 0.0,
+        "excl0": false
+      },
+      "cand_enum": {
+        "delta": -0.024999999999999998,
+        "lo": -0.0325,
+        "hi": -0.0175,
+        "excl0": true
+      }
+    },
+    "HCLT->Ours-AS": {
+      "text": {
+        "delta": -0.10566666666666666,
+        "lo": -0.12366666666666667,
+        "hi": -0.088,
+        "excl0": true
+      },
+      "mm": {
+        "delta": -0.004833333333333301,
+        "lo": -0.016833333333333336,
+        "hi": 0.007333333333333334,
+        "excl0": false
+      },
+      "novel_gold": {
+        "delta": -0.13,
+        "lo": -0.154,
+        "hi": -0.1065,
+        "excl0": true
+      },
+      "result_prop": {
+        "delta": -0.001,
+        "lo": -0.0025,
+        "hi": 0.0,
+        "excl0": false
+      },
+      "cand_enum": {
+        "delta": -0.0005000000000000004,
+        "lo": -0.009,
+        "hi": 0.008,
+        "excl0": false
+      }
+    }
+  },
+  "image_dependence": {
+    "raw_gain": {
+      "delta": 0.055499999999999994,
+      "lo": 0.04433333333333333,
+      "hi": 0.06716666666666667,
+      "excl0": true
+    },
+    "as_gain": {
+      "delta": 0.2305,
+      "lo": 0.212,
+      "hi": 0.24883333333333335,
+      "excl0": true
+    },
+    "as_gain_minus_raw_gain": {
+      "delta": 0.17500000000000002,
+      "lo": 0.15666666666666665,
+      "hi": 0.193,
+      "excl0": true
+    }
+  },
+  "verdict": {
+    "A_structured_acquisition": "PARTIAL",
+    "B_suppression_effect": "novel-gold significantly lower (-0.2875 [-0.3075, -0.2675]  (excludes 0)); text-only utility cost -0.1773 [-0.1948, -0.1598]  (excludes 0); mm utility -0.0023 [-0.0117, +0.0067]  (includes 0)",
+    "C_final_method": "Ours-AS vs HCLT: text significantly lower (-0.1057 [-0.1237, -0.0880]  (excludes 0)), mm not statistically significant (-0.0048 [-0.0168, +0.0073]  (includes 0)), novel-gold significantly lower (-0.1300 [-0.1540, -0.1065]  (excludes 0))"
+  }
+}

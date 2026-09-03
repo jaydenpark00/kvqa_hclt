@@ -1,0 +1,114 @@
+# KVQA — FINAL: Generic vs HCLT-style (High-relevance + High-density Top3) vs Ours-Raw vs Ours-AS.
+# Same philosophy as the Korean-GQA final experiment; adds Multimodal Auxiliary conditions.
+# Method FROZEN before the 2K run. No prompt/detector/evaluator/sample change after results.
+
+provenance:
+  dataset: "SKT/KVQA official HF unified annotation"
+  annotation_path: "data/kvqa_raw/data/kvqa_annotations.json"
+  images_dir: "data/kvqa_raw/images"
+  split_file: "/ceph_data/jaydenpark/2026_HCLT-main/2026_HCLT-main/data/splits/kvqa_8_1_1_seed2026.json"
+  split_used: "test_annotation_indices (repo seed-2026 80/10/remainder shuffle) — NOT the official HCLT 2025 split"
+  eval_subset_name: "fixed KVQA-2K evaluation subset"           # NOT 'exact HCLT reproduction'
+  subsample_seed: 20260903
+  subsample_rule: "random.Random(20260903).sample(sorted(resolvable kvqa-source test indices), 2000); manifest ordered by annotation_index; deterministic; never resampled"
+  N: 2000
+  backbone: "Qwen/Qwen3-VL-8B-Instruct"
+  env: "/ceph_data/jaydenpark/envs/qwen3vl"
+  qwen_wrapper: "src/gqa/qwen3vl.py (reused, greedy do_sample=false num_beams=1)"
+  run_timestamp: "set at run time"
+
+# The generation prompts are the FROZEN Korean-GQA-final versions, reused verbatim.
+frozen_generation_prompts:
+  source_config: "configs/gqa_final_hclt_vs_ours_as_2k.yaml"
+  generic_caption: "generic_caption.instruction        (max_new_tokens 300)   # section 4 prompt"
+  decomposition:   "ours_decomposition.instruction     (max_new_tokens 128)   # revised_decomposition_prompt()"
+  raw_evidence:    "ours_raw_evidence.instruction      (max_new_tokens 300)   # evidence_preservation_caption_prompt()"
+  suppressor:      "suppressor.adapted_evidence_suppressor_instruction (max_new_tokens 420)"
+  note: "kvqa_final_gen reads these 4 strings from source_config so they are byte-identical to the
+         GQA final run. The old evidence_caption_prompt() is NOT used."
+
+hclt_style_combination:                                          # section 20 — one pipeline, not two methods
+  arrangement: high_relevance
+  density: high
+  top_k: 3
+  embedding_model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  embedding_loader: "transformers.AutoModel + mean pooling + L2 normalize (model cached; sentence-transformers pkg not installed)"
+  similarity: cosine
+  sentence_splitter: "deterministic: split on . ? ! 。 and newlines; strip list markers; no semantic rewrite/merge; drop <2-char fragments"
+  tie_breaking: "earlier sentence in the original generic caption wins"
+  selected_ordering: "similarity descending"
+  fewer_than_3: "use the sentences that exist; NEVER duplicate"
+  gold_use: "NONE"
+  pipeline: [generic_caption, sentence_split, question_relevance_ranking, descending_reorder, top3_select]
+  label: "HCLT-style High-relevance + High-density (adaptation, NOT exact HCLT reproduction)"
+
+# ---------------------------------------------------------------------------------------
+# COMMON final-answer solver — identical for every method + condition.
+#   *_text  : reused VERBATIM from /ceph_data/jaydenpark/2026_HCLT-main/.../src/prompts.py
+#             text_only_answer_prompt(caption, question)
+#   *_mm    : reused VERBATIM from the same file, answer_prompt(caption, question)
+#   iq      : same rule block, no caption (for the I+Q baseline)
+# answer_type is NEVER passed to the solver (section 8).
+# ---------------------------------------------------------------------------------------
+solver:
+  max_new_tokens: 20                                            # repo vqa_max_new_tokens (HCLT 2025 used 20)
+  do_sample: false
+  source_file: "/ceph_data/jaydenpark/2026_HCLT-main/2026_HCLT-main/src/prompts.py"
+  text_prompt: |
+    다음 이미지 설명만 참고하여 질문에 답하세요.
+
+    이미지 설명:
+    {caption}
+
+    질문:
+    {question}
+
+    규칙:
+    - 실제 이미지는 제공되지 않았습니다. 이미지 설명에 없는 내용을 추측하지 마세요.
+    - 정답만 간결하게 작성하세요.
+    - 불필요한 설명이나 이유는 작성하지 마세요.
+    - 숫자 질문이면 숫자 중심으로 답하세요.
+    - 예/아니오 질문이면 예 또는 아니오로 답하세요.
+  mm_prompt: |
+    다음 이미지와 이미지 설명을 참고하여 질문에 답하세요.
+
+    이미지 설명:
+    {caption}
+
+    질문:
+    {question}
+
+    규칙:
+    - 정답만 간결하게 작성하세요.
+    - 불필요한 설명이나 이유는 작성하지 마세요.
+    - 숫자 질문이면 숫자 중심으로 답하세요.
+    - 예/아니오 질문이면 예 또는 아니오로 답하세요.
+  iq_prompt: |
+    다음 이미지를 참고하여 질문에 답하세요.
+
+    질문:
+    {question}
+
+    규칙:
+    - 정답만 간결하게 작성하세요.
+    - 불필요한 설명이나 이유는 작성하지 마세요.
+    - 숫자 질문이면 숫자 중심으로 답하세요.
+    - 예/아니오 질문이면 예 또는 아니오로 답하세요.
+
+evaluator:
+  code: "src/gqa/kvqa_softscore.py  (VERBATIM copy of HCLT-repo src/evaluate.py; selftest + repo cross-check)"
+  metric: "mean( min(exact-normalized-match-count / 3, 1) )   over 10 human answers"
+  normalization: "SKTBrain/BAN-KVQA compute_softscore.py punctuation + whitespace (no semantic rewrite)"
+  frozen: true
+
+leakage:
+  code: "src/gqa/main2000_diag.py regex defs (RESULT_PROPOSITION, CANDIDATE_ENUMERATION) reused verbatim"
+  novel_gold: |
+    10-gold adaptation: unique_gold = set(normalize_answer(a) for a in answers_10).
+    ANY_NOVEL_GOLD_MENTION = 1 iff some unique gold surface occurs in the representation text
+    AND that surface is NOT already a whitespace-insensitive substring of the question.
+    Also store NOVEL_GOLD_MATCH_COUNT = number of distinct gold surfaces found. Lexical proxy only.
+  applied_to: [Generic, HCLT-style, Ours-Raw, Ours-AS]     # once per representation (shared by text+mm)
+
+stats:
+  method: "paired bootstrap 95% CI, seed 20240301, 10000 resamples, on sample-level soft scores (0, 1/3, 2/3, 1)"

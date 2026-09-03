@@ -1,0 +1,25 @@
+{
+  "seed": 20260903,
+  "N": 2000,
+  "unique_question_ids": 2000,
+  "unique_images": 2000,
+  "split_file": "/ceph_data/jaydenpark/2026_HCLT-main/2026_HCLT-main/data/splits/kvqa_8_1_1_seed2026.json",
+  "split_test_indices_total": 10045,
+  "test_source_counts": {
+    "kvqa": 9424,
+    "vizwiz": 621
+  },
+  "resolvable_kvqa_test_records": 9424,
+  "answer_type_counts": {
+    "other": 1427,
+    "unanswerable": 272,
+    "number": 198,
+    "yes/no": 103
+  },
+  "answerable_counts": {
+    "1": 1826,
+    "0": 174
+  },
+  "order": "annotation_index ascending",
+  "note": "fixed KVQA-2K evaluation subset; repo seed-2026 test split; kvqa-source with resolvable image; NOT an exact HCLT 2025 reproduction; FROZEN — never resampled."
+}
